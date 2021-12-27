@@ -39,6 +39,8 @@ const (
 	DestRealmFlag         = "dest_realm"
 	DisableDestHostFlag   = "disable_dest_host"
 	OverwriteDestHostFlag = "overwrite_dest_host"
+	OcsTlsCertFileFlag    = "ocs_tls_cert_file"
+	OcsTlsKeyFileFlag     = "ocs_tls_key_file"
 
 	DefaultWatchdogIntervalSeconds = 3
 )
@@ -69,6 +71,8 @@ type DiameterServerConfig struct {
 	DestRealm         string
 	DisableDestHost   bool
 	OverwriteDestHost bool
+	TlsCertFile       string
+	TlsKeyFile        string
 }
 
 // DiameterClientConfig holds information for connecting with a diameter server

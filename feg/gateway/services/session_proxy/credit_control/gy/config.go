@@ -38,6 +38,8 @@ const (
 	OCSRealmEnv             = "OCS_REALM"
 	OCSApnOverwriteEnv      = "OCS_APN_OVERWRITE"
 	OCSServiceIdentifierEnv = "OCS_SERVICE_IDENTIFIER_OVERWRITE"
+	OCSTlsCertFileEnv       = "OCS_TLS_CERT_FILE"
+	OCSTlsKeyFileEnv        = "OCS_TLS_KEY_FILE"
 	DisableDestHostEnv      = "DISABLE_DEST_HOST"
 	OverwriteDestHostEnv    = "GY_OVERWRITE_DEST_HOST"
 	UseGyForAuthOnlyEnv     = "USE_GY_FOR_AUTH_ONLY"
@@ -109,6 +111,8 @@ func GetOCSConfiguration() []*diameter.DiameterServerConfig {
 				DestRealm:         diameter.GetValueOrEnv(diameter.DestRealmFlag, OCSRealmEnv, ""),
 				DisableDestHost:   diameter.GetBoolValueOrEnv(diameter.DisableDestHostFlag, DisableDestHostEnv, false),
 				OverwriteDestHost: diameter.GetBoolValueOrEnv(diameter.OverwriteDestHostFlag, OverwriteDestHostEnv, false),
+				TlsCertFile:       diameter.GetValueOrEnv(diameter.OcsTlsCertFileFlag, OCSTlsCertFileEnv, ""),
+				TlsKeyFile:        diameter.GetValueOrEnv(diameter.OcsTlsKeyFileFlag, OCSTlsKeyFileEnv, ""),
 			},
 		}
 	}

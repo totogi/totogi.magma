@@ -20,10 +20,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"magma/feg/gateway/diameter"
 	"magma/feg/gateway/services/session_proxy/credit_control"
 	"magma/feg/gateway/services/session_proxy/credit_control/gy"
+	"magma/lte/cloud/go/protos"
 )
 
 const (
@@ -71,11 +73,11 @@ func init() {
 	// New Flags
 	flag.BoolVar(&help, "help", false, "[optional] Display this help message")
 	flag.StringVar(&imsi, "imsi", "001010000000031", "imsi")
-	flag.StringVar(&sid, "sid", "1234", "session id")
+	flag.StringVar(&sid, "sid", fmt.Sprintf("1234-%s", time.Now().String()), "session id")
 	flag.StringVar(&ueIP, "ue_ip", "192.168.1.1", "UE IPv4 address")
 	flag.StringVar(&spgwIP, "spgw_ip", "192.168.128.1", "SPGW IPv4 address")
 	flag.StringVar(&ratingGroupString, "rating_groups", "1,2:200,33", "Rating groups to request credit for (comma separated)")
-	flag.Uint64Var(&usedCredit, "used_credit", 10000000, "# of bytes to report as used in CCR-Update and Terminate")
+	flag.Uint64Var(&usedCredit, "used_credit", 1, "# of bytes to report as used in CCR-Update and Terminate")
 	flag.BoolVar(&wait, "wait", true, "wait for key input in between calls")
 	flag.StringVar(&commands, "commands", "", "CCR commands to run keyed by letter, e.g. IT. I = Init, T = Terminate")
 	flag.StringVar(&msisdn, "msisdn", "541123525401", "msisdn")
@@ -174,7 +176,7 @@ func sendCreditCall(config *cliConfig, requestType credit_control.CreditRequestT
 			serviceId = &sid
 		}
 		if requestType == credit_control.CRTInit {
-			credits = append(credits, &gy.UsedCredits{RatingGroup: rg, ServiceIdentifier: serviceId})
+			credits = append(credits, &gy.UsedCredits{RatingGroup: rg, ServiceIdentifier: serviceId, RequestedUnits: &protos.RequestedUnits{Total: config.usedCredit, Tx: config.usedCredit, Rx: 0}})
 		} else {
 			credits = append(credits, &gy.UsedCredits{
 				RatingGroup:       rg,
@@ -182,6 +184,7 @@ func sendCreditCall(config *cliConfig, requestType credit_control.CreditRequestT
 				InputOctets:       0, // make all used credit output for simplicity
 				OutputOctets:      config.usedCredit,
 				TotalOctets:       config.usedCredit,
+				RequestedUnits:    &protos.RequestedUnits{Total: config.usedCredit, Tx: config.usedCredit, Rx: 0},
 			})
 		}
 	}

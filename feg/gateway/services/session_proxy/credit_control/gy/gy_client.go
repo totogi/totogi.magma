@@ -390,9 +390,10 @@ func getMSCCAVP(requestType credit_control.CreditRequestType, credits *UsedCredi
 			usuGrp = []*diam.AVP{}
 		} else {
 			usuGrp = []*diam.AVP{
-				diam.NewAVP(avp.CCInputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Rx)),
-				diam.NewAVP(avp.CCOutputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Tx)),
-				diam.NewAVP(avp.CCTotalOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Total)),
+				diam.NewAVP(avp.CCServiceSpecificUnits, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Total)),
+				// diam.NewAVP(avp.CCInputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Rx)),
+				// diam.NewAVP(avp.CCOutputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Tx)),
+				// diam.NewAVP(avp.CCTotalOctets, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Total)),
 			}
 		}
 		avpGroup = append(
@@ -413,9 +414,10 @@ func getMSCCAVP(requestType credit_control.CreditRequestType, credits *UsedCredi
 	// Used credits can only be sent on updates and terminates
 	if requestType != credit_control.CRTInit {
 		usuGrp := []*diam.AVP{
-			diam.NewAVP(avp.CCInputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.InputOctets)),
-			diam.NewAVP(avp.CCOutputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.OutputOctets)),
-			diam.NewAVP(avp.CCTotalOctets, avp.Mbit, 0, datatype.Unsigned64(credits.TotalOctets)),
+			diam.NewAVP(avp.CCServiceSpecificUnits, avp.Mbit, 0, datatype.Unsigned64(credits.RequestedUnits.Total)),
+			// diam.NewAVP(avp.CCInputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.InputOctets)),
+			// diam.NewAVP(avp.CCOutputOctets, avp.Mbit, 0, datatype.Unsigned64(credits.OutputOctets)),
+			// diam.NewAVP(avp.CCTotalOctets, avp.Mbit, 0, datatype.Unsigned64(credits.TotalOctets)),
 		}
 
 		// For documentation on where the reporting reason AVP is placed, see section 7.2.175 on

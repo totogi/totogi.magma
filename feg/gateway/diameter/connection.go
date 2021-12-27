@@ -133,6 +133,7 @@ func (c *Connection) getDiamConnection() (diam.Conn, *smpeer.Metadata, error) {
 	var (
 		localAddr net.Addr
 		err       error
+		conn      diam.Conn
 	)
 	if len(c.server.LocalAddr) > 0 {
 		if len(c.server.Protocol) == 0 || strings.HasPrefix(c.server.Protocol, "tcp") {
@@ -145,7 +146,11 @@ func (c *Connection) getDiamConnection() (diam.Conn, *smpeer.Metadata, error) {
 				"Invalid " + c.server.Protocol + " local address '" + c.server.LocalAddr + "':" + err.Error())
 		}
 	}
-	conn, err := c.client.DialExt(c.server.Protocol, c.server.Addr, 0, localAddr)
+	if c.server.TlsCertFile == "" {
+		conn, err = c.client.DialExt(c.server.Protocol, c.server.Addr, 0, localAddr)
+	} else {
+		conn, err = c.client.DialTLSExt(c.server.Protocol, c.server.Addr, c.server.TlsCertFile, c.server.TlsKeyFile, 0, localAddr)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
