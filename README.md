@@ -1,64 +1,94 @@
-## This Repo
-
-**TODOs:**
-
-0. Review alternate process using cloudstrapper to avoid much of this overhead and provide an SSH entrypoint
-1. Change clone instructions to this repo
-2. Remove steps in Readme that simply using this repo avoids
-3. Test cleaned/modified terraform template in new AWS account and remove those custom steps  
-
-## Prerequisites and Required Software
+# Prerequisites and Required Software
 
 - [Install The AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-- Obtain and configure AWS CLI credentials for the AWS Account you are deploying to
-
+- Obtain AWS CLI credentials for the AWS Account you are deploying to with 
+- Configure those credentials to be used with `aws configure`
+- [Install boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html)
+- [Install Firefox](https://www.mozilla.org/en-US/firefox/new/)
+- [Install Terraform](https://learn.hashicorp.com/tutorials/terraform/install-cli)
+- [Install Node.js and NPM](https://nodejs.org/en/download/)
+- Install Newman globally on your host with npm: `npm install -g newman`
 - [Install `jq`](https://stedolan.github.io/jq/download/)
-- [Install `kubectl`](https://kubernetes.io/docs/tasks/tools/)
-- [Install `aws-iam-authenticator`](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html)
+- [Install Certbot](https://eff-certbot.readthedocs.io/en/stable/install.html#alternate-installation-methods) to use locally with the `certonly` flag. 
+  - Instructions [for Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-use-certbot-standalone-mode-to-retrieve-let-s-encrypt-ssl-certificates-on-ubuntu-16-04)
+  - Instructions for Mac: 
+    - [Install Brew](https://brew.sh/)
+    - And then certbot with Brew: `brew install certbot`
+- [Install Vagrant](https://www.vagrantup.com/downloads)
+- [Install VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+- Install `go@1.13` and `pyenv`
+  - On Mac with Homebrew: `brew install go@1.13 pyenv`
+  - Or with another package manager
+- [Docker](https://www.docker.com/get-started)
+- Docker Compose
+
+Configure Go, and pyenv:
+
+```bash
+echo 'export PATH="/usr/local/opt/go@1.13/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="/usr/local/opt/go@1.13/bin:$PATH"' >> ~/.zshrc
+echo 'if command -v pyenv 1>/dev/null 2>&1; then eval "$(pyenv init -)"; fi' >> ~/.zshrc
+exec $SHELL
+pyenv install 3.7.3
+pyenv global 3.7.3
+```
+
+Install other requirements:
+```
+pip3 install ansible fabric3 jsonpickle requests PyYAML
+vagrant plugin install vagrant-vbguest
+```
+
+Build/Deploy installation requirements:
+
+```bash
+brew install aws-iam-authenticator kubectl helm terraform
+```
+
+If not on Mac use a different package manager to install these.
+
+# Installing Magma
 
 ## Clone Git Repository
 
-**This step may change to reflect the modifications to magma core or this repo
-
 ```bash
-git clone https://github.com/magma/magma.git
-cd magma
-git checkout v1.6.0
+git clone https://github.com/trilogy-group/totogi.magma.git
+cd totogi-magma
 export MAGMA_ROOT=$(pwd)
- 
-git apply ../*.diff
 ```
 
-## Set up vars
+## Set up variables
 
 ```bash
 export YOUR_EMAIL="fernanado.medina.corey@telcodr.com"
 export YOUR_ROOT_DOMAIN="totogidemo.com"
-export YOUR_ORC8R_DOMAIN=*.orc8r.$YOUR_ROOT_DOMAIN
+export YOUR_CA_DOMAIN="rootca.orc8r.totogidemo.com"
+export YOUR_ORC8R_DOMAIN="orc8r.$YOUR_ROOT_DOMAIN"
+export YOUR_ORC8R_DOMAIN_WILDCARD="*.orc8r.$YOUR_ROOT_DOMAIN"
+export YOUR_ORC8R_NMS_DOMAIN_WILDCARD="*.nms.orc8r.$YOUR_ROOT_DOMAIN"
 ```
 
-## SSL Certificates
+## Generating and Validating SSL Certificates
 
-**Install `certbot`**
+Create a certificate and the private key with certbot. This will require setting ACME challenge in a Route53 hosted zone. 
 
-[Get Certbot](https://eff-certbot.readthedocs.io/en/stable/install.html#alternate-installation-methods) to use locally with the `certonly` flag. 
-
-Instructions [for Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-use-certbot-standalone-mode-to-retrieve-let-s-encrypt-ssl-certificates-on-ubuntu-16-04)
-
-Instructions for Mac:
-
-- [Install Brew](https://brew.sh/)
-- Install certbot with Brew: `brew install certbot`
-
-Create the certificate and the private key. Requires setting ACME challenge in Route53 hosted zone. The step below generates the files `fullchain.pem` and `privkey.pem`.
+The step below generates the files `fullchain.pem` and `privkey.pem`.
 
 ```bash
 certbot certonly --manual \
 --preferred-challenges=dns \
 --email $YOUR_EMAIL \
 --server https://acme-v02.api.letsencrypt.org/directory \
---agree-tos -d $YOUR_ORC8R_DOMAIN
+--agree-tos 
+-d $YOUR_CA_DOMAIN
+-d $YOUR_ORC8R_DOMAIN_NO_WILDCARD
+
+YOUR_CA_DOMAIN
+YOUR_ORC8R_DOMAIN="*.orc8r.$YOUR_ROOT_DOMAIN"
+YOUR_ORC8R_DOMAIN_NO_WILDCARD="orc8r.$YOUR_ROOT_DOMAIN"
+YOUR_ORC8R_NMS_DOMAIN_WILDCARD="*.nms.orc8r.$YOUR_ROOT_DOMAIN"
 ```
+
 
 This will prompt you to deploy a DNS record for your domain with something like this:
 
@@ -79,14 +109,14 @@ Look for one or more bolded line(s) below the line ';ANSWER'. It should show the
 value(s) you've just added.
 ```
 
-Replace these with the values from `certbot`: 
+Set these values as environment variables (use your values):
 
 ```bash
-export CHALLENGETXTDOMAIN="_acme-challenge.orc8r.totogidemo.com."
-export CHALLENGETXTVALUE="fGaiP7x-WZjeNwu4ZhCiM_O3JS4HjSzGLMBLaPKHpNA"
+export CHALLENGE_TXT_DOMAIN="_acme-challenge.orc8r.totogidemo.com."
+export CHALLENGE_TXT_VALUE="fGaiP7x-WZjeNwu4ZhCiM_O3JS4HjSzGLMBLaPKHpNA"
 ```
 
-First, get your hosted zone ID:
+Also set your hosted zone ID as an environment variable:
 
 ```bash
 export ROOT_HOSTED_ZONE_ID_LONG=`aws route53 list-hosted-zones-by-name \
@@ -96,7 +126,7 @@ export ROOT_HOSTED_ZONE_ID_LONG=`aws route53 list-hosted-zones-by-name \
 export ROOT_HOSTED_ZONE_ID=${ROOT_HOSTED_ZONE_ID_LONG/\/hostedzone\//}
 ```
 
-Then change the update the record sets:
+Then update the record sets with the ACME challenge:
 
 ```bash
 export R53_BATCH_CHANGE_JSON='
@@ -104,11 +134,11 @@ export R53_BATCH_CHANGE_JSON='
     "Changes": [{
       "Action"              : "CREATE"
       ,"ResourceRecordSet"  : {
-        "Name"              : "'"$CHALLENGETXTDOMAIN"'"
+        "Name"              : "'"$CHALLENGE_TXT_DOMAIN"'"
         ,"Type"             : "TXT"
         ,"TTL"              : 120
         ,"ResourceRecords"  : [{
-            "Value"         : "\"'"$CHALLENGETXTVALUE"'\""
+            "Value"         : "\"'"$CHALLENGE_TXT_VALUE"'\""
         }]
       }
     }]
@@ -140,9 +170,15 @@ sudo cp /etc/letsencrypt/live/orc8r.totogidemo.com/privkey.pem controller.key
 mv lets-encrypt-r3.pem rootCA.pem
 ```
 
-The earlier `certbot` command should have output certificates for you at `/etc/letsencrypt/live/orc8r.totogidemo.com/` and a full list of LetsEncrypt certificates can be found here: https://letsencrypt.org/certificates/.
+This should should output certificates for you at `/etc/letsencrypt/live/orc8r.totogidemo.com/`. We also used `wget` to download the `lets-encrypt-r3.pem` file. For reference, that file and other LetsEncrypt certificates can be found [here](https://letsencrypt.org/certificates/). 
 
-Then generate the remaining certificates with the create_application_certs.sh script:
+You may also need to Change permissions on your new `controller.key` file. This is highly permissive, only consider doing this on your local system:
+
+```bash
+sudo chmod 777 controller.key
+```
+
+Next, generate the remaining certificates with the `create_application_certs.sh` script:
 
 ```bash
 ${MAGMA_ROOT}/orc8r/cloud/deploy/scripts/create_application_certs.sh $YOUR_ORC8R_DOMAIN
@@ -172,35 +208,26 @@ admin_operator.key.pem
 admin_operator.pem
 ```
 
-Note - there is no rootCA.key unless you do a self-signed version of this process.
+Note - there is no `rootCA.key` unless you opt for a self-signed version of this process.
 
 ## Preparing the Terraform deployment
 
 Edit the terrform file located at `${MAGMA_ROOT}/orc8r/cloud/deploy/terraform/orc8r-helm-aws/examples/basic/main.tf`
 
 - Update the `region` in both modules to the region you're deploying into
-- Update `orc8r_deployment_type` to `all`
-- Update `orc8r_tag` to `1.6.0` or a newer version if appropriate
-- Add `orc8r_db_engine_version = "12.6"` to the `orc8r` module*** This may actually end up needing to be `"12.7"` given errors encountered when running the full `terraform apply` command below. The magma docs say 12.6 but Terraform may complain.
-- Update `cluster_version` to `"1.18"`
 - Update the `orc8r_domain_name` to the value of your domain name
 - Add a custom `orc8r_db_password`
-- Change the `orc8r_sns_email` to your email
-- If an account has already been deployed to 
+- Change the `orc8r_sns_email` to your email 
 
-Comment out these variables in the orc8r-app module, so as to default to the Magma docker registry and helm repository values.
-- docker_registry
-- docker_user
-- docker_pass
-- helm_repo
-- helm_user
-- helm_pass
+## Deploying with Terraform 
 
 Then, deploy the root module with:
 
-- `terraform apply -target=module.orc8r`
+```bash
+terraform apply -target=module.orc8r
+```
 
-It should output something *like* this:
+It should output something like this:
 
 ```
 Apply complete! Resources: 72 added, 0 changed, 0 destroyed.
@@ -215,33 +242,29 @@ nameservers = tolist([
 ])
 ```
 
-After it's done, copy the output Kube Config file locally:
+After this initial deployment is done, copy the output Kube Config file locally to the correct location.
 
 ```bash
 mkdir -p ~/.kube
 cp kubeconfig_orc8r ~/.kube/config
 ```
 
-Then edit the following two files:
-- `orc8r/cloud/deploy/terraform/orc8r-helm-aws/scripts/create_orc8r_secrets.py` 
-- `orc8r/cloud/deploy/terraform/orc8r-helm-aws/secrets.tf`
 
-In each file, comment out the line with: `'rootCA.key',` on it. That line is only needed for self-signed scenarios.
+Next, use Terraform to deploy the secrets to AWS:
 
-Then run this using terraform: 
-- `terraform apply -target=module.orc8r-app.null_resource.orc8r_seed_secrets`
+```bash
+terraform apply -target=module.orc8r-app.null_resource.orc8r_seed_secrets
+```
 
-Then run `terraform apply`
+Then run `terraform apply` to finish the deployment.
 
-You may also need to update the Postgres version in the following file:
-- `orc8r/cloud/deploy/terraform/orc8r-helm-aws/examples/basic/main.tf`
+After the deployment completes, check on the Kubernetes cluster with:
 
-The `orc8r_db_engine_version` value may need to be changed from `"12.6"` to `"12.7"`
-
-Check on pods: 
+```bash
 kubectl get pods --all-namespaces
+```
 
-
+You should see a long list of running pods.
 
 # Pod Orchestration
 
@@ -258,7 +281,7 @@ Verify it was created:
 kubectl --namespace orc8r exec ${ORC_POD} -- /var/opt/magma/bin/accessc list-certs
 ```
 
-## Create an NMS user for the ‘master’ organization
+## Create an NMS user for the 'master' organization
 
 Get the name of the NMS Pod and set it as an env variable:
 
@@ -295,34 +318,16 @@ nameservers = tolist([
 Next, add the values you see to the main Route 53 main hosted zone (e.g. totogidemo.com):
 
 ```bash
-export TF_NAMESERVERS=$(terraform output -json nameservers)
-
-```
-**TODO:**  
-- Use JQ to parse the output of the command above and create the required JSON for the R53 API call below
-- Update ROOT_HOSTED_ZONE_ID below to the relevant subdomain
-
-
-"ResourceRecords": [
-  {"Value": "ns-915.awsdns-50.net"},
-  {"Value": "ns-1814.awsdns-34.co.uk"},
-  {"Value": "ns-1271.awsdns-30.org"},
-  {"Value": "ns-213.awsdns-26.com"}
-]
-
-
-```bash
+export NAMESERVERS_JSON=$(terraform output -json nameservers | jq '[{Value: .[]}]')
 export R53_BATCH_CHANGE_JSON='
   {
     "Changes": [{
       "Action"              : "CREATE"
       ,"ResourceRecordSet"  : {
-        "Name"              : "'"$CHALLENGETXTDOMAIN"'"
+        "Name"              : "'"$YOUR_ORC8R_DOMAIN_NO_WILDCARD"'"
         ,"Type"             : "NS"
         ,"TTL"              : 120
-        ,"ResourceRecords"  : [{
-            '"$DNS_RECORDS"'
-        }]
+        ,"ResourceRecords"  : '"$NAMESERVERS_JSON"'
       }
     }]
   }
@@ -340,31 +345,476 @@ aws route53 list-resource-record-sets \
 --query 'ResourceRecordSets[?Type==`NS`]'
 ```
 
+## Connecting to Magma Infrastructure
+
+### The NMS UI
 
 After this point, NMS UI can be reached via: https://master.nms.orc8r.totogidemo.com/
 
-For accessing the Swagger UI, use Firefox, add “admin_operator.pfx”, then navigate to https://api.orc8r.totogidemo.com/swagger/v1/ui/ 
-Should look like below.
+### The Swagger UI
 
-**TODO** Add link to the pfx process
+To access the Swagger UI you will need to set a PFX certificate in your browser. For this, we're using Firefox.
+
+- Open Firefox and navigate to: `about:preferences` or go to the settings tab through the Firefox menus
+- Search for "Certificates" and click "View Certificates"
+- Select the "Your Certificates Tab" if it isn't already selected
+- Select "Import"
+- Enter in the required password for the PFX you set earlier
+- Find the `admin_operator.pfx` file in `~/secrets/certs` and select it for import
+- Navigate to `https://api.orc8r.totogidemo.com/swagger/v1/ui/`
+- Accept the prompt if presented with one
+
+It should look like a typical SwaggerUI with the title of "Magma"
+
+# Installing the AGW as a local VM
+
+- Go to the Gateway portion of the code: `cd ${MAGMA_ROOT}/lte/gateway`
+- Run `vagrant up magma`
+- If you see an error regarding allowed IP address ranges for the host-only network you will need to:
+  - Create or edit the `/etc/vbox/networks.conf` file 
+  - Run: `sudo mkdir -p /etc/vbox && echo "* 192.168.0.0/16" | sudo tee /etc/vbox/networks.conf`
+  - This is due to a recent (~Nov 2021) change in VirtualBox [described here](https://forums.virtualbox.org/viewtopic.php?f=8&t=104549)
+
+## Build the AGW from Source in the VM
+
+From the corresponding OS and directory run the shown commands:
+
+```
+HOST [magma/lte/gateway]$ vagrant ssh magma
+MAGMA-VM [/home/vagrant]$ cd magma/lte/gateway
+MAGMA-VM [/home/vagrant/magma/lte/gateway]$ make run
+```
+
+If you encounter errors with this process then `exit` out to the host and run `vagrant provision magma` in the host environment for more debugging information.
+
+If you see an issue about an untrusted release file [like this](https://github.com/fluent/fluent-bit/issues/4180) then just try the same commands again: 
+
+```
+HOST [magma/lte/gateway]$ vagrant ssh magma
+MAGMA-VM [/home/vagrant]$ cd magma/lte/gateway
+MAGMA-VM [/home/vagrant/magma/lte/gateway]$ make run
+```
+
+Check the relevant Magma services are running with:
+
+- `service magma@* status`
+
+At this point, we need to get the HW UUID of the AGW instance to be registered on the NMS.
+
+- Elevate to root: `sudo su`
+- And then run `show_gateway_info.py`
+
+The command above should already be in the $PATH at `/home/vagrant/build/python/bin/show_gateway_info.py`
+
+This should output something like this:
+
+```
+Hardware ID
+-----------
+7fe45b5e-62d2-4e16-8774-1955565e70e1
+
+Challenge key
+-------------
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE9h0eluqkSJsbysbxR8rzxSTadWCqdeEtLnfnf5dH1amAUAzw/jHiPrKl2n/0G2IPzytp6Nwnvmq/N5EEmUEX8aIJZisDRp2zWfhfnhlqJ5Gg+y/ujirwpYq2S9f9hr+/
+
+Notes
+-----
+- Hardware ID is this gateway's unique identifier
+- Challenge key is this gateway's long-term keypair used for
+  bootstrapping a secure connection to the cloud
+```
+
+## Configure the AGW with the Orchestrator using the NMS UI
+
+Once the AGW is installed and running it will have default configuration, and will not be able to "checkin" to the Orc8r. The gateway needs to be defined in the Orc8r cloud first in order for this to work.
+
+To do this, start by visiting the "master" node for the https://master.nms.orc8r.totogidemo.com/. 
+
+Then, under the master node create a new organization: https://master.nms.orc8r.totogidemo.com/master/organizations/new
+  - The organization should have access to the NMS tab
+  - The organization should have "Enable all networks" checked
+
+Once the organization is created, create a user for it as well with the role ‘Super User’.
+
+Then log on to the organization’s NMS page, if the organization name is `myagw` then following would be the URL: https://myagw.nms.orc8r.totogidemo.com/ 
+
+After you are signed in with your new super user, the next step is to create a network.
+
+- Click "Add Network"
+- Network ID: `localagwnet`
+- Name: `localagwnet` 
+- Description: `localagwnet`
+- Type: of type `lte`
+
+After creating the network refresh the page. You should now see an "Equipment" section on the left.
+
+localagwnet
+
+At this point the ‘Equipment’ tab should be available on the left sidebar. Gateway instance needs to be added from here by clicking on the ‘Add New’ button. The ‘Hardware UUID’ and ‘Challenge Key’ values need to come from the earlier output printed by the ‘show_gateway_info.py’ script. Once the ‘Save And Continue’ button is clicked on the 1st page of the modal dialog, the gateway instance will be created. Rest of the configuration can be left by clicking on the ‘Cancel’ button.
+
+## Configure the AGW to Connect to the Orchestrator from the AGW VM
+
+Make sure you are in the AGW VM and then take the following steps:
+
+- First, stop the AGW services with `service magma@* stop`
+- Then, create a new directory for the magma configs `mkdir -p /var/opt/magma/configs` ls
+- Then edit the file at `/home/vagrant/magma/lte/gateway/configs/control_proxy.yml` to the following (changing values as needed for the totogi.com domain):
+
+```yml
+cloud_address: controller.orc8r.totogidemo.com
+cloud_port: 443
+bootstrap_address: bootstrapper-controller.orc8r.totogidemo.com
+bootstrap_port: 443
+fluentd_address: fluentd.orc8r.totogidemo.com
+fluentd_port: 24224
+rootca_cert: /var/opt/magma/tmp/certs/rootCA.pem
+```
+
+After it's edited, copy it to a new location:
+
+- `cp /home/vagrant/magma/lte/gateway/configs/control_proxy.yml /var/opt/magma/configs/control_proxy.yml`
+
+Delete the current contents of the AGW Magma certs directory and create a new file:
+
+- `rm /var/opt/magma/certs/*`
+- `touch /var/opt/magma/certs/rootCA.pem`
+
+Copy the contents of `~/secrets/certs/rootCA.pem` on the *host machine* to this `rootCA.pem` on the guest.
+
+Restart the services on the AGW: 
+
+- `service magma@magmad restart`
+- `journalctl -u magma@magmad -f`
+
+## Connecting the local AGW to the Cloud-based Orchestrator
+
+https://docs.magmacore.org/docs/lte/deploy_config_agw
 
 ## Connecting to Totogi Charging System
 
-**TODOs:** 
-- Consolidate steps from these documents:
-- https://docs.google.com/document/d/1j54886bN_kGzyW0039gg3vs2aPEvy7ZW55EHW0qORuI/edit#heading=h.2cy6sykle8uf
-- https://docs.google.com/document/d/1bxfXMg6BF7zp8mBqU2RFo433eqH1SLpucO77iaRfkmE/edit?hl=en&forcehl=1#
-- Create the totogi tenant, get the user credentials, etc. 
-- Attempt to automate this process for us if possible
-- Use the FedGW CLI to mock data coming from Magma (not end to end, just mocked diamter results)
+### Create Your Tenant
 
-## Testing with srsRAn
+The Totogi Charing system requires you to have your own tenant in order to send requests from your Magma infrastructure to Totogi. At the moment this process is fairly manual.
+
+The overall process is described [here](https://docs.google.com/document/d/1bxfXMg6BF7zp8mBqU2RFo433eqH1SLpucO77iaRfkmE/edit?hl=en&forcehl=1#) but you may need to take additional steps if you lack access to the production Totogi OCS account.
+
+Start by providing data to create your tenant:
+
+[{
+  "commonName": "<YOUR_COMMON_NAME>",
+  "configurationAdminUsername": "fernando.medina.corey@telcodr.com",
+  "infraUsername": "fernando.medina.corey@telcodr.com",
+  "deviceAdminUsername": "fernando.medina.corey@telcodr.com"
+}]
+
+The values you need will be: 
+- `commonName`: This is the common name of the `rootCA.pem` certificate you are using on your orchestrator that will also be used to authentic traffic to Totogi.
+- `configurationAdminUsername` - an email address that you will use to sign into `plan.totogi.com`. 
+- `infraUsername` - an email address that you will use to get a JWT to make HTTP API request to the charging API
+- `deviceAdminUsername` - an email address that you will use to generate a JWT in order to make API requests to create Accounts and devices
+
+The three usernames can be the same or different. After creating this payload if you have production access to can use a Lambda function mentioned in the earlier document to generate your credentials and then retrieve them from the AWS secrets manager. Otherwise, you will need to send this payload to Federico Benitez (federico.benitez@aurea.com) in the "TelcoDR Eng-BU" space in order to have the tenant created for you.
+
+This process may change later.
+
+### Create Your First Totogi Plan
+
+When you have the username and password for all these accounts start by logging into the plan.totogi.com UI. We could do some of these actions using the APIs but it would be more difficult.
+
+First, set up general information under the settings Menu (the gear on the left). An example configuration:
+
+- General - 1s for everything
+- Overage - 1s for everything
+- Off-peak Time - Sun 12am to 5am
+
+Now create a new plan with the +Plan button and pressing "New Plan". 
+
+- Plan Name: `totogi-basics`
+- Price: $20 Monthly
+
+From the Features search and dropdown find:
+
+- Voice: Unlimited
+- Text: 200 messages
+
+Then click "Save".
+
+After this, we need to publish our plan so visit back into the plan and click the dropdown to publish it.
+
+When finished, you should see the Plan ID GUID in the URL. For example with the URL of:
+
+- `https://www.plan.totogi.com/plans/61859b43-2974-43d9-8341-4b5e50660822`
+- The GUID is `61859b43-2974-43d9-8341-4b5e50660822`
+
+After the plan is published you can also grab the Plan version ID from opening the console network tab and reviewing the GraphQL requests after refreshing the page.
+
+![](./readme-photos/version-id.png)
+
+We could also get this value through the APIs but this is easier. 
+
+### Create the Subscriber Account and Device
+
+Start by creating a file called `aws-auth-data.json` that contains the following structure:
+
+```
+{
+   "AuthParameters" : {
+      "USERNAME" : "fernando.medina.corey@telcodr.com",
+      "PASSWORD" : "WuFguk^9|:"
+   },
+   "AuthFlow" : "USER_PASSWORD_AUTH",
+   "ClientId" : "3bsr3p2j5ffn1cf05knuqc03v2"
+}
+```
+
+- USERNAME is the deviceAdmin username (in this case fernando.medina.corey@telcodr.com)
+- PASSWORD is the deviceAdmin password
+Client ID is a static identifier.
+
+Then run this command to get the ID token you'll need to authorize requests:
+
+```bash
+curl -X POST --data @aws-auth-data.json \
+-H 'X-Amz-Target: AWSCognitoIdentityProviderService.InitiateAuth' \
+-H 'Content-Type: application/x-amz-json-1.1' https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ivnC5IUbA/ | jq '.AuthenticationResult.IdToken' 
+```
+
+Next, we can add an account and device. I suggest creating a Postman Collection from the [GraphQL Schema](https://drive.google.com/file/d/1qpmlbGptgARJp6P8rJhI7wwpzJYlaHKF/view?usp=sharing). 
+
+**Create the Account**
+
+Make the following changes:
+
+1. Copy the production URL `https://4c3mrbifgveqpkxnni5fcjhjwi.appsync-api.us-east-1.amazonaws.com/graphql` and edit the collection's variables to include it as the `url` variable.
+
+2. Then, open up the `mutations` folder and go to `createAccount` and update the GraphQL Variables section on the right side with this:
+    ```json
+    {
+      "input": {
+        "providerId": "f96f03f0-2dc5-3ff7-a6ae-9eb641224e51"
+      }
+    }
+    ```
+    Use the provider ID of the tenant you're working under. 
+
+3. Then, go to the "Headers" section and add an "Authorization" header with the value of the unquoted IdToken output from the earlier curl command. **NOTE:** This does not include the standard `Bearer` prefix.
+4. Go to the "Authorization" section of the request and set it to "No Auth" (as we'll be handling that manually from the Headers)
+5. Then send the postman request and record the accountId in the response.
+
+**Create the Device**
+
+1. Go to the `createDevice` mutation and edit the GraphQL variables so that they include your providerId and your recently-created accountId like this:
+    ```json
+    {
+      "input": {
+        "providerId": "f96f03f0-2dc5-3ff7-a6ae-9eb641224e51",
+        "accountId": "8499a87e-277c-4729-94bb-add27d2f6bb0"
+      }
+    }
+    ```
+2. Add the same `Authorization` header
+3. In the "Authorization" section set it to "No Auth"
+4. Send the request and record the deviceId in the response:
+    ![](./readme-photos/device-id.png)
+
+### Subscribe the Account to the Plan
+
+1. Go to the `subscribeToPlan` mutation and set the Authorizer header as the idToken value as before.
+2. Go to the "Authorization" section and set "No Auth" as before
+3. Fill out the GraphQL variables using your earlier obtained values:
+    ```json
+    {
+      "input": {
+        "providerId": "f96f03f0-2dc5-3ff7-a6ae-9eb641224e51",
+        "accountId": "8499a87e-277c-4729-94bb-add27d2f6bb0",
+        "planVersionId": "ec810f9d-f501-4dd6-9641-c7444ae72a60"
+      }
+    }
+    ```
+
+If the request succeeds then your account should now be subscribed to the plan!
+
+### Top up the Account
+
+Modify your `aws-auth-data.json` file (or create a new one) so that it contains the following structure:
+
+```json
+{
+   "AuthParameters" : {
+      "USERNAME" : "fernando.medina.corey@telcodr.com",
+      "PASSWORD" : "3ndE!db=ZF"
+   },
+   "AuthFlow" : "USER_PASSWORD_AUTH",
+   "ClientId" : "3bsr3ps2j5ffn1cf05knuqc03v2"
+}
+```
+
+USERNAME - This time the username should be the Infrastructure Admin username
+PASSWORD - The Infrastructure Admin Password
+
+
+```bash
+export ID_TOKEN=$(curl -X POST --data @aws-auth-data.json \
+-H 'X-Amz-Target: AWSCognitoIdentityProviderService.InitiateAuth' \
+-H 'Content-Type: application/x-amz-json-1.1' https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ivnC5IUbA/ | jq -r '.AuthenticationResult.IdToken')
+```
+
+
+```bash
+curl -X POST -H "Content-Type: application/json" -H "Authorization:Bearer $ID_TOKEN" -d @credit-request.json https://lb0prod.dev.ccab.devfactory.com/nchf-convergedcharging/v3/chargingData
+```
+
+With the account created we can now add a device.
+
+## Testing Your AGW and Orc8r with srsRAN
+
+In order to confirm that AGW, Orc8r, and NMS are all set up correctly then follow [this demo](https://github.com/ShubhamTatvamasi/srsRAN-demo) to test a virtualized UE and eNB. 
+
+After your local srsRAN VM is setup you can also use it to test end to end with the FeG.
+
+## Testing Your Certificates and Connection to Totogi with the FeG gy Client
+
+In order to make sure that your FeG will be able to connect to Totogi as expected, you can build the FeG gy CLI client following the instructions [laid out here](https://docs.google.com/document/d/1cOPrPYzgVc4PNXhGYRVLVSKq8uj-stivyGYGnEo26tI/edit)
+
+Note that the IP address used in the document changes regularly and may need to be updated.
+
+
+When the FeG is built you can set up environment variables (replace the values as needed, especially for your local certificates if running locally):
+
+```bash
+export OCS_ADDR=44.197.233.169:3868
+export OCS_TLS_CERT_FILE=/Users/fernando/Desktop/certbot-test-for-feg-rootca-domain/rootca.orc8r/fullchain.pem
+export OCS_TLS_KEY_FILE=/Users/fernando/Desktop/certbot-test-for-feg-rootca-domain/rootca.orc8r/privkey.pem
+export GY_DIAM_HOST=rootca.orc8r.totogidemo.com
+export GY_DIAM_REALM=orc8r.totogidemo.com
+export OCS_HOST=ocs.totogi.com
+export OCS_REALM=totogi.com
+```
+
+And with the variables configured, then run a command to trigger Diameter charging requests:
+
+```bash
+./gy_client_cli --commands=IUT \
+--rating_groups=2 \
+--msisdn=$DEVICE_ID \
+--imsi= --requestedUnitsTotal=8 \
+--used_credit=2
+```
+
+# Changelog
+
+- Updated `orc8r/gateway/python/setup.py` to bump the redis version the AGW builds with. It was causing a mismatch error described [here](https://github.com/magma/magma/issues/10461) and [solved here](https://github.com/magma/magma/pull/10462/files)
+
+# Misc. Notes
+
+When creating a tenant/provider with a wildcard certificate e.g.:
+*.orc8r.totogidemo.com
+
+You must explicitly match those same certificates
+
+Also, when creating a non-wildcard subdomain under the orc8r e.g.:
+
+rootca.orc8r.totogidemo.com
+
+If you are creating the certificates after creating the new hosted zone for the orc8r then you must add the txt records directly to the orc8r hosted zone.
+
+## Previously provisioned plans you can test with (May have been cleaned out by Eng recently):
+
+Provider/Tenant details:
+
+```yaml
+provider id: f96f03f0-2dc5-3ff7-a6ae-9eb641224e51
+provider root cert domain: rootca.orc8r.totogidemo.com
+```
+
+**TOTOGI LIMITED (PLENTY) PLAN**:
+
+This plan has limited minute/sms/data allocations but has a lot of capacity.
+
+```yaml
+Plan "totogi-limited-plenty": e1e9649e-a41e-454d-9839-13ba0b9dce3e
+Plan Version Id - Version 1: 682d38fd-2341-469b-9690-1223abdb6f0d
+New Account ID: a946c8bc-0d28-4bde-9cc7-9dee0f9dddbc
+New Device ID: 001012333444555
+```
+
+TOTOGI UNLIMITED PLAN:
+This plan had some unlimited services. 
+
+```yaml
+Plan "totogi-unlimited": 088bf69f-5e01-4d7e-9cfa-414068b4f8e5
+Plan version 1: 17d6c4c6-8f45-4b65-ba1c-b0dcf45e405a
+New account ID: 467beced-ccdf-4e45-a9b8-a8fa84f87108
+New Device ID: bcc7f3b5-3608-4eba-96dc-41be3cc665d1
+```
+
+You can check on these or create new ones [in the UI](https://www.plan.totogi.com/settings).
+Username: fernando.medina.corey@telcodr.com
+Password: Ask Fernando
+
+
+
+export OCS_ADDR=44.197.233.169:3868
+export OCS_TLS_CERT_FILE=/Users/fernando/Desktop/certbot-test-for-feg-rootca-domain/rootca.orc8r/fullchain.pem
+export OCS_TLS_KEY_FILE=/Users/fernando/Desktop/certbot-test-for-feg-rootca-domain/rootca.orc8r/privkey.pem
+export GY_DIAM_HOST=rootca.orc8r.totogidemo.com
+export GY_DIAM_REALM=orc8r.totogidemo.com
+export OCS_HOST=ocs.totogi.com
+export OCS_REALM=totogi.com
+export DEVICE_ID="bcc7f3b5-3608-4eba-96dc-41be3cc665d1"
+
+
+## Orc8r Commands you might need to run in order to change things within the orc8r:
+
+Delete old secrets:
+```bash
+kubectl delete secret fluentd-certs nms-certs orc8r-certs -n orc8r
+```
+
+Create new secrets:
+
+```bash
+kubectl -n orc8r create secret generic fluentd-certs \
+  --from-file=certifier.pem \
+  --from-file=fluentd.pem \
+  --from-file=fluentd.key
+
+kubectl -n orc8r create secret generic nms-certs \
+  --from-file=admin_operator.key.pem \
+  --from-file=admin_operator.pem \
+  --from-file=controller.crt \
+  --from-file=controller.key
+
+kubectl -n orc8r create secret generic orc8r-certs \
+  --from-file=admin_operator.pem \
+  --from-file=bootstrapper.key \
+  --from-file=certifier.key \
+  --from-file=certifier.pem \
+  --from-file=controller.crt \
+  --from-file=controller.key \
+  --from-file=rootCA.pem \
+  --from-file=rootCA.key
+```
+
+Getting the Orc8r pod and updating the cert on it (If you need to change the certs)
+
+```bash
+ORC_POD=$(kubectl -n orc8r get pod -l app.kubernetes.io/component=orchestrator -o jsonpath='{.items[0].metadata.name}')
+kubectl -n orc8r exec -it ${ORC_POD} -- envdir /var/opt/magma/envdir /var/opt/magma/bin/accessc \
+  add-existing -admin -cert /var/opt/magma/certs/admin_operator.pem admin_operator
+```
+
+Forcing new orc8r pods to update to the new secrets (when they spins back up they will have the secrets):
+
+```bash
+kubectl delete pods --all -n orc8r
+```
 
 **TODOs:**
-- Setup srsRAN for testing end to end (without eSIMs/UE Devices)
-- https://docs.srsran.com/en/latest/
-- Example: https://www.youtube.com/watch?v=ipiW9JXXiso&ab_channel=WavelabsTechnologies
 
-
-
+- Test this existing new streamlined deployment process in a new AWS account
+- Explore cloudstrapper deployment of Orchestrator - [blog post](https://aws.amazon.com/blogs/industries/deploying-magma-on-aws-cloud-in-region-on-premises-and-at-edge/)
+- Explore cloudstrapper deployment of AGW (Region deployment) - [blog post](https://aws.amazon.com/blogs/industries/deploying-magma-on-aws-cloud-in-region-on-premises-and-at-edge/)
+- Consider replacing the certbot step with AWS Certificate Manager
+- Investigate privacy error related to sub subdomains (Seem to be missing SANs we could add during the certificate creation process with certbot using an extra set of domains with -d flags). E.g. The SSL Cert is issued for *.orc8r.totogidemo.com not *.nms.orc8r.totogidemo.com which may be the issue.
 
