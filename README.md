@@ -818,3 +818,48 @@ kubectl delete pods --all -n orc8r
 - Consider replacing the certbot step with AWS Certificate Manager
 - Investigate privacy error related to sub subdomains (Seem to be missing SANs we could add during the certificate creation process with certbot using an extra set of domains with -d flags). E.g. The SSL Cert is issued for *.orc8r.totogidemo.com not *.nms.orc8r.totogidemo.com which may be the issue.
 
+
+- Hooks for first issue with certbot. Something like this:
+  ```bash
+  certbot certonly \
+    --config-dir `pwd`/etc/letsencrypt \
+    --work-dir `pwd`/var/lib/letsencrypt \
+    --logs-dir `pwd`/var/log \
+    --manual --preferred-challenges dns \
+    --manual-auth-hook `pwd`/etc/letsencrypt/renewal-hooks/auth/manual-auth-hook.sh
+  ```
+
+  And then this is `manual-auth-hook.sh`:
+
+  ```bash
+  #!/bin/bash
+
+  ROUTE53_ZONE=xxxxxxxxxxxxxx
+  ACME_HOSTNAME="_acme-challenge.${CERTBOT_DOMAIN}"
+
+  echo "Adding TXT record \"${CERTBOT_VALIDATION}\" for ${ACME_HOSTNAME} ..."
+  aws route53 change-resource-record-sets \
+      --hosted-zone-id ${ROUTE53_ZONE} \
+      --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"${ACME_HOSTNAME}\",\"Type\":\"TXT\",\"TTL\":30,\"ResourceRecords\":[{\"Value\": \"\\\"${CERTBOT_VALIDATION}\\\"\"}]}}]}"
+  sleep 15
+
+  TXT_VALUE="$(dig -t txt "${ACME_HOSTNAME}" | sed -n "s/^${ACME_HOSTNAME}.*\"\(.*\)\"/\1/p")"
+  while [[ "${TXT_VALUE}" != "${CERTBOT_VALIDATION}" ]]; do
+      echo "Current TXT value '${TXT_VALUE}' does not match '${CERTBOT_VALIDATION}'. Wait 5 seconds before retry ..."
+      sleep 5
+      TXT_VALUE="$(dig -t txt "${ACME_HOSTNAME}" | sed -n "s/^${ACME_HOSTNAME}.*\"\(.*\)\"/\1/p")"
+  done
+  ```
+
+- Hook for renewal
+  ```bash
+  #!/bin/bash
+
+  certbot renew \
+      --config-dir `pwd`/etc/letsencrypt \
+      --work-dir `pwd`/var/lib/letsencrypt \
+      --logs-dir `pwd`/var/log \
+      --manual-auth-hook `pwd`/etc/letsencrypt/renewal-hooks/auth/manual-auth-hook.sh
+  ```
+
+  Would have to figure out where this runs. Can lambda run this with bash and the CLI? Translate this into Python and run regularly there instead? Does Certbot have a Python client? Can we use the same flags and output variables like txt value which we need to put into the DNS?
