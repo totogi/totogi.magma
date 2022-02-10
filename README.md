@@ -83,10 +83,6 @@ certbot certonly --manual \
 -d $YOUR_CA_DOMAIN
 -d $YOUR_ORC8R_DOMAIN_NO_WILDCARD
 
-YOUR_CA_DOMAIN
-YOUR_ORC8R_DOMAIN="*.orc8r.$YOUR_ROOT_DOMAIN"
-YOUR_ORC8R_DOMAIN_NO_WILDCARD="orc8r.$YOUR_ROOT_DOMAIN"
-YOUR_ORC8R_NMS_DOMAIN_WILDCARD="*.nms.orc8r.$YOUR_ROOT_DOMAIN"
 ```
 
 
@@ -809,6 +805,61 @@ Forcing new orc8r pods to update to the new secrets (when they spins back up the
 ```bash
 kubectl delete pods --all -n orc8r
 ```
+
+# Regeneration of Certificates
+If your AGW is unable to connect to orc8r, there is a debugging script `checkin_cli.py` in AGW and FEG which diagnosis the cause.
+```bash
+[AGW]$ sudo su
+[AGW]$ checkin_cli.py
+``` 
+If it says that certificates are expired, we can regenrate the certs and update on all platforms. The process is as follows:
+## 1. Generate Certificates using Certbot
+```bash
+export MAGMA_ROOT=$(pwd)
+export YOUR_EMAIL="abdullah.ashfaq@totogi.com"
+export YOUR_ROOT_DOMAIN=totogidemo.com
+export YOUR_CA_DOMAIN="rootca.orc8r.totogidemo.com"
+export YOUR_ORC8R_DOMAIN="orc8r.$YOUR_ROOT_DOMAIN"
+export YOUR_ORC8R_DOMAIN_WILDCARD="*.orc8r.$YOUR_ROOT_DOMAIN"
+export YOUR_ORC8R_DOMAIN_NO_WILDCARD="orc8r.$YOUR_ROOT_DOMAIN"
+export YOUR_ORC8R_NMS_DOMAIN_WILDCARD="*.nms.orc8r.$YOUR_ROOT_DOMAIN"
+
+sudo certbot certonly --manual --preferred-challenges=dns --email $YOUR_EMAIL --server https://acme-v02.api.letsencrypt.org/directory --agree-tos 
+-d $YOUR_CA_DOMAIN 
+-d $YOUR_ORC8R_DOMAIN_NO_WILDCARD 
+-d $YOUR_ORC8R_NMS_DOMAIN_WILDCARD 
+-d api.orc8r.totogidemo.com 
+-d controller.orc8r.totogidemo.com 
+-d bootstrapper-controller.orc8r.totogidemo.com 
+-d fluentd.orc8r.totogidemo.com
+# This command will pause and ask to update TXT on route53. 
+# Continue only after updating the TXT and it will generate certs in /etc/letsencrypt/live/yourdomain.com/ if successful
+``` 
+Then follow the steps mentioned in `Set up Certificates:` section above to get certs in ~/secrets/certs
+
+## 2. Update on Secrets Manager
+Use terraform to update the secrets. The  complete guide can be found [here](https://docs.magmacore.org/docs/howtos/troubleshooting/update_certificates). But sometimes `terraform apply` fails so we run targetted apply statements
+```bash
+terraform taint module.orc8r-app.null_resource.orc8r_seed_secrets
+terraform apply -target=module.orc8r-app.null_resource.orc8r_seed_secrets
+```
+
+## 3. Restarting Orc8r
+Kill the pods and they will restart again using the new certs from secret manager
+```bash
+# Run this statement before killing
+ORC_POD=$(kubectl -n orc8r get pod -l app.kubernetes.io/component=orchestrator -o jsonpath='{.items[0].metadata.name}')
+kubectl -n orc8r exec -it ${ORC_POD} -- envdir /var/opt/magma/envdir /var/opt/magma/bin/accessc \
+  add-existing -admin -cert /var/opt/magma/certs/admin_operator.pem admin_operator
+
+# Now destroy all orc8r pods
+kubectl delete pods --all -n orc8r
+
+# After destroying they will relaunch themselves. To get their status run
+kubectl -n orc8r get pod
+
+```
+
 
 **TODOs:**
 
