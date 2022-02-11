@@ -838,11 +838,11 @@ data:
     - userarn: arn:aws:iam::617147411452:user/abdullah.ashfaq
       username: abdullah
       groups:
-      - system:masters
-    - userarn: ARN: arn:aws:iam::617147411452:user/michael.selig
+        - system:masters
+    - userarn: arn:aws:iam::617147411452:user/michael.selig
       username: michaelselig
       groups:
-      - system:masters
+        - system:masters
 kind: ConfigMap
 metadata:
   creationTimestamp: "2021-12-25T01:17:22Z"
