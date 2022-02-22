@@ -888,6 +888,82 @@ kubectl get pod
 
 ```
 
+# Adding New Users to the k8s Cluster:
+
+1. Add the user in the AWS account as an IAM user and give them their AWS Access keys
+2. The user must set up their AWS CLI locally with those creds
+3. Take the ARN of the user and save it for later
+4. Add a user to the k8s aws-auth config by running `kubectl edit configmap aws-auth -n kube-system`
+
+And then edit the file this brings up in the terminal. This is an example of the file with multiple users, just add the new user with their AWS ARN and a new k8s username (can be the same or different as the AWS user name):
+
+```yml
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: v1
+data:
+  mapAccounts: |
+    []
+  mapRoles: |
+    - "groups":
+      - "system:bootstrappers"
+      - "system:nodes"
+      "rolearn": "arn:aws:iam::617147411452:role/orc8r20211225011717787500000001"
+      "username": "system:node:{{EC2PrivateDNSName}}"
+  mapUsers: |
+    - userarn: arn:aws:iam::617147411452:user/abdullah.ashfaq
+      username: abdullah
+      groups:
+        - system:masters
+    - userarn: arn:aws:iam::617147411452:user/michael.selig
+      username: michaelselig
+      groups:
+        - system:masters
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2021-12-25T01:17:22Z"
+  labels:
+    app.kubernetes.io/managed-by: Terraform
+    terraform.io/module: terraform-aws-modules.eks.aws
+  managedFields:
+  - apiVersion: v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:data:
+        .: {}
+        f:mapAccounts: {}
+        f:mapRoles: {}
+      f:metadata:
+        f:labels:
+          .: {}
+          f:app.kubernetes.io/managed-by: {}
+          f:terraform.io/module: {}
+    manager: HashiCorp
+    operation: Update
+    time: "2021-12-25T01:17:22Z"
+  - apiVersion: v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:data:
+        f:mapUsers: {}
+    manager: kubectl
+    operation: Update
+    time: "2022-02-07T15:30:56Z"
+  name: aws-auth
+  namespace: kube-system
+  resourceVersion: "13055663"
+  selfLink: /api/v1/namespaces/kube-system/configmaps/aws-auth
+  uid: 1f4b10df-6deb-4cd6-b431-44247595e61b
+```
+
+You can check that the user has been added after saving the file by running this:
+
+- `kubectl describe configmap -n kube-system aws-auth`
+
+5. After the user is added the new user should set up a Kube Config file using the maual process described [here](https://docs.aws.amazon.com/eks/latest/userguide/create-kubeconfig.html). The relevant required values required are `us-west-2` and `orc8r`. 
+
 
 **TODOs:**
 
