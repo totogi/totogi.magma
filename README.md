@@ -845,8 +845,36 @@ terraform apply -target=module.orc8r-app.null_resource.orc8r_seed_secrets
 ```
 
 ## 3. Restarting Orc8r
-Kill the pods and they will restart again using the new certs from secret manager
+Kill the pods and they will restart again using the new certs from secret manager. Some useful commands [here](https://github.com/ShubhamTatvamasi/magma-aws/blob/master/docs/get-aws-certs.md). 
 ```bash
+
+# Change namespace to orc8r to avoid -n orc8r in every kubectl command
+kubectl config set-context --current --namespace orc8r
+
+# delete old certificates:
+kubectl delete secret fluentd-certs nms-certs orc8r-certs
+
+#create Orc8r secrets from files:
+kubectl create secret generic fluentd-certs \
+  --from-file=certifier.pem \
+  --from-file=fluentd.pem \
+  --from-file=fluentd.key
+
+kubectl create secret generic nms-certs \
+  --from-file=admin_operator.key.pem \
+  --from-file=admin_operator.pem \
+  --from-file=controller.crt \
+  --from-file=controller.key
+
+kubectl create secret generic orc8r-certs \
+  --from-file=admin_operator.pem \
+  --from-file=bootstrapper.key \
+  --from-file=certifier.key \
+  --from-file=certifier.pem \
+  --from-file=controller.crt \
+  --from-file=controller.key \
+  --from-file=rootCA.pem
+
 # Run this statement before killing
 ORC_POD=$(kubectl -n orc8r get pod -l app.kubernetes.io/component=orchestrator -o jsonpath='{.items[0].metadata.name}')
 kubectl -n orc8r exec -it ${ORC_POD} -- envdir /var/opt/magma/envdir /var/opt/magma/bin/accessc \
@@ -856,7 +884,7 @@ kubectl -n orc8r exec -it ${ORC_POD} -- envdir /var/opt/magma/envdir /var/opt/ma
 kubectl delete pods --all -n orc8r
 
 # After destroying they will relaunch themselves. To get their status run
-kubectl -n orc8r get pod
+kubectl get pod
 
 ```
 
